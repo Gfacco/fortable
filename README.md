@@ -1,2 +1,2 @@
 # fortable
-My cool new project!
+a project to make table in fortran
