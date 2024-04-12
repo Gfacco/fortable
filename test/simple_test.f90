@@ -10,12 +10,10 @@ module simple_test
   public :: test_simple
 
   character(len=*), parameter :: SIMPLE_LIST_FORMAT = &
-    "-----  ------  -------------" // NEWLINE &
-//  "Sun    696000     1.9891e+09" // NEWLINE &
-//  "Earth    6371         5973.6" // NEWLINE &
-//  "Moon     1737           73.5" // NEWLINE &
-//  "Mars     3390         641.85" // NEWLINE &
-//  "-----  ------  -------------"
+    "Sun   696000 1.9891e+09" // NEWLINE &
+//  "Earth 6371   5973.6    " // NEWLINE &
+//  "Moon  1737   73.5      " // NEWLINE &
+//  "Mars  3390   641.85    " 
 contains
   function test_simple() result(tests)
     type(test_item_t) :: tests
@@ -36,6 +34,6 @@ contains
     tabular_string = tabulate(simple_list)
 
 
-    result_ = assert_equals(SIMPLE_LIST_FORMAT, char(tabular_string), char(tabular_string))
+    result_ = assert_equals(SIMPLE_LIST_FORMAT, tabular_string)
   end function
 end module
