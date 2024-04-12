@@ -1,0 +1,14 @@
+name = "fortable"
+version = "0.1.0"
+license = "license"
+author = "gfacco"
+maintainer = "gfacco@gmail.com"
+copyright = "Copyright 2024, gfacco"
+
+
+[dependencies]
+
+[dev-dependencies]
+veggies = { git = "https://gitlab.com/everythingfunctional/veggies.git", tag = "v1.0.5" }
+iso_varying_string = { git = "https://gitlab.com/everythingfunctional/iso_varying_string.git", tag = "v3.0.4" }
+
