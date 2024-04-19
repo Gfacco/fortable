@@ -24,6 +24,7 @@ contains
   end function
 
   elemental function pad_to(string, width, num_lines) result(padded)
+  !taken from https://gitlab.com/everythingfunctional/string_tree -by Brad Richardson
         type(varying_string), intent(in) :: string
         integer, intent(in) :: width, num_lines
         type(varying_string) :: padded
