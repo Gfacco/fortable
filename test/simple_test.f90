@@ -25,7 +25,7 @@ contains
 
     tests = describe("A simple list", &
                         [ it("displays properly", check_simple) &
-                        , it("with row headers displays properly", check_row_headers)])
+                        , it("with row headers displays properly", check_simple_row_headers)])
   end function
 
   function check_simple() result(result_)
@@ -46,7 +46,7 @@ contains
 
     result_ = assert_equals(SIMPLE_LIST_FORMAT, tabular_string)
   end function
-  function check_row_headers() result(result_)
+  function check_simple_row_headers() result(result_)
     type(result_t) :: result_
     type(varying_string) :: simple_list(4,3)
     type(varying_string) :: simple_array(12)

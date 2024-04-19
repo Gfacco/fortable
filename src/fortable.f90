@@ -14,7 +14,7 @@ contains
     type(varying_string) :: table
     integer :: max_column_width(size(list, dim=2))
     integer :: lines(size(list, dim=2))
-    integer :: i,j
+    integer :: i
 
     if (present(row_headers)) then
       if (row_headers) then
