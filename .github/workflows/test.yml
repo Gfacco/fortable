@@ -1,0 +1,61 @@
+name: CI
+
+on: [push, pull_request]
+
+
+jobs:
+  Build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    env:
+      GCC_V: 13
+
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - uses: fortran-lang/setup-fpm@v5
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install Dependencies Ubuntu
+      if: contains(matrix.os, 'ubuntu')
+      run: |
+        sudo apt-get update
+        sudo apt install -y gfortran-${GCC_V} gnuplot graphviz
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${GCC_V} 100 \
+          --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${GCC_V}
+
+    - name: Install Dependencies MacOS
+      if: contains(matrix.os, 'macos')
+      run: |
+        brew install gcc@9 gcc@${GCC_V} gnuplot
+        sudo ln -s $(which gfortran-${GCC_V}) $(dirname $(which gfortran-${GCC_V}))/gfortran
+
+    - name: Install Dependencies Windows
+      if: contains(matrix.os, 'windows')
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        path-type: inherit
+        install: >-
+          mingw-w64-x86_64-gcc-fortran
+          mingw-w64-x86_64-gnuplot
+
+    - name: Build and Test Linux and MacOS
+      if: contains(matrix.os, 'ubuntu') || contains(matrix.os, 'macos')
+      run: |
+        which gfortran
+        gfortran --version
+        fpm test --flag "-g -Wall -Wextra -Werror -pedantic -std=f2018 -Wimplicit-interface -fcheck=all -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal" 
+
+    - name: Build and Test Windows
+      if: contains(matrix.os, 'windows')
+      shell: msys2 {0}
+      run: |
+        which gfortran
+        gfortran --version
+        fpm test --flag "-g -Wall -Wextra -Werror -pedantic -std=f2018 -Wimplicit-interface -fcheck=all -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal" 
