@@ -47,21 +47,19 @@ contains
         integer, intent(in) :: width, num_lines
         integer, intent(in) :: alignment
         type(varying_string) :: padded
-
+        type(varying_string), allocatable :: padded_lines(:), lines(:)
         integer :: i
+        allocate(padded_lines(0))
+        allocate(lines(0))
         select case(alignment)
         case(left)
-          associate(lines => split_at(string, NEWLINE))
-            associate(padded_lines => pad_left(lines, width))
-                padded = join([padded_lines, [(var_str(repeat(" ", width)), i = 1, num_lines - size(lines))]], "")
-            end associate
-          end associate   
+            lines = split_at(string, NEWLINE)
+            padded_lines = pad_left(lines, width)
+            padded = join([padded_lines, [(var_str(repeat(" ", width)), i = 1, num_lines - size([lines]))]], "")
         case(right)
-          associate(lines => split_at(string, NEWLINE))
-            associate(padded_lines => pad_right(lines, width))
-                padded = join([padded_lines, [(var_str(repeat(" ", width)), i = 1, num_lines - size(lines))]], "")
-            end associate
-          end associate
+            lines = split_at(string, NEWLINE)
+            padded_lines = pad_right(lines, width)
+            padded = join([padded_lines, [(var_str(repeat(" ", width)), i = 1, num_lines - size([lines]))]], "")
         case default   
         end select
 
