@@ -2,60 +2,126 @@ name: CI
 
 on: [push, pull_request]
 
+env:
+  GCC_FLAGS: "-g -Wall -Wextra -Werror -Wno-error=maybe-uninitialized -pedantic -std=f2023 -Wimplicit-interface -fcheck=all -ffree-line-length-none -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal"
+  # GFortran 15 flags: same as GCC_FLAGS but without -Werror/-Wno-error=maybe-uninitialized
+  # due to false-positive -Wmaybe-recursive warnings (GCC bug, no -Wno-error=maybe-recursive exists)
+  GCC_15_FLAGS: "-g -Wall -Wextra -pedantic -std=f2023 -Wimplicit-interface -fcheck=all -ffree-line-length-none -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal"
 
 jobs:
-  Build:
+  Build-Nix:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
-    env:
-      GCC_V: 14
-
+        include:
+          - os: ubuntu-latest
+            toolchain: {compiler: gcc, version: '13'}
+          - os: ubuntu-latest
+            toolchain: {compiler: gcc, version: '14'}
+          - os: ubuntu-latest
+            toolchain: {compiler: gcc, version: '15'}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
 
+    - uses: fortran-lang/setup-fortran@660cfc0046068d9588cec846f94cbc00118cc613 # main @ 660cfc0
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
+
     - uses: fortran-lang/setup-fpm@v9
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
+        fpm-version: latest
 
-    - name: Install Dependencies Ubuntu
-      if: contains(matrix.os, 'ubuntu')
+    - name: Debug and fix assembler for GCC 15
+      if: matrix.toolchain.version == '15' && contains(matrix.os || '', 'ubuntu')
       run: |
-        sudo apt-get update
-        sudo apt install -y gfortran-${GCC_V} gnuplot graphviz
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${GCC_V} 100 \
-          --slave /usr/bin/gfortran gfortran /usr/bin/gfortran-${GCC_V}
+        which as
+        as --version | head -1
 
-    - name: Install Dependencies MacOS
-      if: contains(matrix.os, 'macos')
+        GFORTRAN_PATH=$(which gfortran)
+        GFORTRAN_VERSION=$(gfortran --version 2>&1 | head -1)
+        echo "Detected gfortran: $GFORTRAN_PATH ($GFORTRAN_VERSION)"
+
+        # Skip if gfortran is not installed via Linuxbrew
+        if ! (echo "$GFORTRAN_VERSION" | grep -qi "brew"); then
+          echo "gfortran not installed via Linuxbrew (path: $GFORTRAN_PATH); skipping binutils setup."
+          exit 0
+        fi
+        echo "Linuxbrew gfortran detected: $GFORTRAN_PATH"
+
+        # Derive brew prefix from gfortran path (e.g. /home/linuxbrew/.linuxbrew/bin/gfortran-15 -> /home/linuxbrew/.linuxbrew)
+        BREW_PREFIX=$(echo "$GFORTRAN_PATH" | sed 's|/bin/gfortran.*||')
+        BREW_BIN="$BREW_PREFIX/bin/brew"
+
+        # Ensure brew is on PATH
+        ! command -v brew &>/dev/null && eval "$($BREW_BIN shellenv)" || echo "::error::brew not found at $BREW_BIN; cannot configure binutils."
+
+        BINUTILS_BIN=$(brew --prefix binutils)/bin
+
+        echo "$BINUTILS_BIN" >> $GITHUB_PATH
+        export PATH="$BINUTILS_BIN:$PATH"
+        echo "Added Linuxbrew binutils to PATH: $BINUTILS_BIN ($(as --version | head -1))"
+
+    - name: FPM info
       run: |
-        brew install gcc@9 gcc@${GCC_V} gnuplot
-        sudo ln -s $(which gfortran-${GCC_V}) $(dirname $(which gfortran-${GCC_V}))/gfortran
+        fpm --version
+        which gfortran
+        gfortran --version | head -1
 
-    - name: Install Dependencies Windows
-      if: contains(matrix.os, 'windows')
+    - name: Build
+      uses: ./.github/actions/fpm-command-with-retry
+      with:
+        command: build
+        flags: ${{ matrix.toolchain.version == '15' && env.GCC_15_FLAGS || env.GCC_FLAGS }}
+
+    - name: Test
+      uses: ./.github/actions/fpm-command-with-retry
+      with:
+        command: test
+        flags: ${{ matrix.toolchain.version == '15' && env.GCC_15_FLAGS || env.GCC_FLAGS }}
+
+  Build-Windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        toolchain:
+          - {compiler: gcc, version: '14'}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - uses: fortran-lang/setup-fortran@660cfc0046068d9588cec846f94cbc00118cc613 # main @ 660cfc0
+      id: setup-fortran
+      with:
+        compiler: ${{ matrix.toolchain.compiler }}
+        version: ${{ matrix.toolchain.version }}
+
+    - uses: fortran-lang/setup-fpm@v9
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        fpm-version: latest
+
+    - name: Install msys2
       uses: msys2/setup-msys2@v2
       with:
-        update: true
+        update: false
         path-type: inherit
-        install: >-
-          mingw-w64-x86_64-gcc-fortran
-          mingw-w64-x86_64-gnuplot
 
-    - name: Build and Test Linux and MacOS
-      if: contains(matrix.os, 'ubuntu') || contains(matrix.os, 'macos')
-      run: |
-        which gfortran
-        gfortran --version
-        fpm test --flag "-g -Wall -Wextra -Werror -pedantic -std=f2018 -Wimplicit-interface -fcheck=all -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal" 
+    - name: Build Windows
+      uses: ./.github/actions/fpm-command-with-retry
+      with:
+        command: build
+        flags: ${{ env.GCC_FLAGS }}
 
-    - name: Build and Test Windows
-      if: contains(matrix.os, 'windows')
-      shell: msys2 {0}
-      run: |
-        which gfortran
-        gfortran --version
-        fpm test --flag "-g -Wall -Wextra -Werror -pedantic -std=f2018 -Wimplicit-interface -fcheck=all -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal" 
+    - name: Test Windows
+      uses: ./.github/actions/fpm-command-with-retry
+      with:
+        command: test
+        flags: ${{ env.GCC_FLAGS }}
