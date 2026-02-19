@@ -15,6 +15,7 @@ contains
     logical, optional, intent(in) :: row_headers
     type(varying_string) :: padded_list(size(list, dim=1),size(list, dim=2))
     type(varying_string) :: table
+    type(varying_string) :: row_strings(size(list, dim=1))
     integer :: max_column_width(size(list, dim=2))
     integer :: lines(size(list, dim=2))
     integer :: i
@@ -29,7 +30,10 @@ contains
         do i=1, size(list, dim=1)
           padded_list(i,1) = pad_to(list(i,1), max_column_width(1), lines(1), alignment = left)
         end do
-        table = join([(join(padded_list(i,:)," "), i=1, size(list,dim=1))], NEWLINE)
+        do i = 1, size(list, dim=1)
+          row_strings(i) = join(padded_list(i,:), " ")
+        end do
+        table = join(row_strings, NEWLINE)
       end if
     else
       max_column_width = [(maxval(len(list(:,i))), i=1, size(max_column_width))]
@@ -37,7 +41,10 @@ contains
       do i=1, size(list, dim=1)
         padded_list(i,:) = pad_to(list(i,:), max_column_width, lines, alignment = left)
       end do
-      table = join([(join(padded_list(i,:)," "), i=1, size(list,dim=1))], NEWLINE)
+      do i = 1, size(list, dim=1)
+        row_strings(i) = join(padded_list(i,:), " ")
+      end do
+      table = join(row_strings, NEWLINE)
     endif
   end function
 
@@ -47,7 +54,7 @@ contains
         integer, intent(in) :: width, num_lines
         integer, intent(in) :: alignment
         type(varying_string) :: padded
-        type(varying_string), allocatable :: padded_lines(:), lines(:)
+        type(varying_string), allocatable :: padded_lines(:), lines(:), padding(:)
         integer :: i
         allocate(padded_lines(0))
         allocate(lines(0))
@@ -55,11 +62,19 @@ contains
         case(left)
             lines = split_at(string, NEWLINE)
             padded_lines = pad_left(lines, width)
-            padded = join([padded_lines, [(var_str(repeat(" ", width)), i = 1, num_lines - size([lines]))]], "")
+            allocate(padding(max(0, num_lines - size(lines))))
+            do i = 1, size(padding)
+                padding(i) = var_str(repeat(" ", width))
+            end do
+            padded = join([padded_lines, padding], "")
         case(right)
             lines = split_at(string, NEWLINE)
             padded_lines = pad_right(lines, width)
-            padded = join([padded_lines, [(var_str(repeat(" ", width)), i = 1, num_lines - size([lines]))]], "")
+            allocate(padding(max(0, num_lines - size(lines))))
+            do i = 1, size(padding)
+                padding(i) = var_str(repeat(" ", width))
+            end do
+            padded = join([padded_lines, padding], "")
         case default   
         end select
 
