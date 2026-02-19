@@ -1,0 +1,118 @@
+name: 'FPM Command with Verbose Retry'
+description: 'Run fpm command with compiler diagnostics, retry with --verbose on failure'
+inputs:
+  flags:
+    description: 'Compiler flags to pass to fpm'
+    required: false
+    default: ''
+  target:
+    description: 'Test target name'
+    required: false
+    default: ''
+  extra-args:
+    description: 'Extra arguments to pass to test executable (e.g., "-- -d -v")'
+    required: false
+    default: ''
+  shell:
+    description: 'Shell to use for running commands (bash or msys2 {0})'
+    required: false
+    default: 'bash'
+  profile:
+    description: 'fpm profile name to pass via --profile'
+    required: false
+    default: ''
+  command:
+    description: 'fpm command to run (test, run, build, etc.)'
+    required: false
+    default: 'test'
+  link-flags:
+    description: 'Linker flags to pass via --link-flag (set to empty string to pass --link-flag with no value)'
+    required: false
+    default: '__NOT_SET__'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run FPM Test
+      shell: ${{ inputs.shell }}
+      run: |
+        # Detect MSYS2 shell and disable argument conversion
+        case "${{ inputs.shell }}" in
+          *"msys2"* )
+            export MSYS2_ARG_CONV_EXCL="*"
+            ;;
+        esac
+
+        # Verify FPM_FC is set
+        if [ -z "${FPM_FC}" ]; then
+          echo "::error::FPM_FC environment variable is not set. Ensure setup-fortran and setup-fpm actions have run."
+          exit 1
+        fi
+
+        if ${{ contains( github.event.head_commit.message || '', '[ci verbose]' ) }} || \
+          ${{ contains( github.event.head_commit.message || '', '[verbose ci]' ) }}; then
+          export FPM_VERBOSE_COMMIT=1
+          echo "FPM_VERBOSE_COMMIT=1" >> "${GITHUB_ENV}"
+          echo "Detected [ci verbose] token: setting FPM_VERBOSE_COMMIT=1"
+        fi
+
+        # Display compiler diagnostics
+        echo "::group::Compiler Information"
+        echo "Compiler path:"
+        which "${FPM_FC}"
+        echo ""
+        echo "Compiler version:"
+        "${FPM_FC}" --version
+        echo "::endgroup::"
+
+        # Build arguments with arrays to preserve empty values
+        ARGS=()
+
+        # Turn on verbose output if requested in commit message
+        if [ "${FPM_VERBOSE_COMMIT}" = "1" ]; then
+          ARGS+=( --verbose )
+        fi
+
+        # Optional profile
+        if [ -n "${{ inputs.profile }}" ]; then
+          ARGS+=( --profile "${{ inputs.profile }}" )
+        fi
+
+        # Compiler flags
+        if [ -n "${{ inputs.flags }}" ]; then
+          ARGS+=( --flag "${{ inputs.flags }}" )
+        fi
+
+        # Optional link flags (including empty string)
+        if [ "${{ inputs.link-flags }}" != "__NOT_SET__" ]; then
+          ARGS+=( --link-flag "${{ inputs.link-flags }}" )
+        fi
+
+        # Optional target
+        if [ -n "${{ inputs.target }}" ]; then
+          ARGS+=( --target "${{ inputs.target }}" )
+        fi
+
+        # Normal flow: run, then retry with --verbose on failure
+        echo "Running fpm ${{ inputs.command }} $(printf '"%s" ' "${ARGS[@]}")${{ inputs.extra-args }}"
+        if fpm "${{ inputs.command }}" "${ARGS[@]}" ${{ inputs.extra-args }}; then
+          echo "✓ ${{ inputs.command }} passed"
+          exit 0
+        fi
+
+        EXIT_CODE=$?
+        if [ "${FPM_VERBOSE_COMMIT}" = "1" ]; then
+          echo "::error::${{ inputs.command }} failed with verbose output enabled via commit message and exit code ${EXIT_CODE}"
+          exit 1
+        else
+          echo "::warning::${{ inputs.command }} failed with exit code ${EXIT_CODE}, retrying with --verbose"
+          echo "Retrying with --verbose"
+          if fpm "${{ inputs.command }}" --verbose "${ARGS[@]}" ${{ inputs.extra-args }}; then
+            echo "✓ ${{ inputs.command }} passed on verbose retry"
+            exit 0
+          else
+            EXIT_CODE=$?
+            echo "::error::${{ inputs.command }} failed after verbose retry with exit code ${EXIT_CODE}"
+            exit 1
+          fi
+        fi
