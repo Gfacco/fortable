@@ -3,7 +3,7 @@ name: CI
 on: [push, pull_request]
 
 env:
-  GCC_FLAGS: "-g -Wall -Wextra -Werror -Wno-error=maybe-uninitialized -pedantic -std=f2023 -Wimplicit-interface -fcheck=all -ffree-line-length-none -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal"
+  GCC_FLAGS: "-g -Wall -Wextra -Werror -Wno-error=maybe-uninitialized -pedantic -std=f2018 -Wimplicit-interface -fcheck=all -ffree-line-length-none -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal"
   # GFortran 15 flags: same as GCC_FLAGS but without -Werror/-Wno-error=maybe-uninitialized
   # due to false-positive -Wmaybe-recursive warnings (GCC bug, no -Wno-error=maybe-recursive exists)
   GCC_15_FLAGS: "-g -Wall -Wextra -pedantic -std=f2023 -Wimplicit-interface -fcheck=all -ffree-line-length-none -fbacktrace -finit-real=snan -ffpe-trap=invalid,zero,overflow,underflow,denormal"
